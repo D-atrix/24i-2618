@@ -1,0 +1,180 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lab 8 - Task 1</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 30px;
+            color: #222;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+        }
+
+        label {
+            margin-right: 10px;
+        }
+
+        select {
+            padding: 6px;
+            margin-right: 20px;
+        }
+
+        svg {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Task 1: Penguin Comparison</h2>
+
+    <p>Compare average body mass and flipper length by species or island.</p>
+
+    <div class="controls">
+        <label for="group">Group by:</label>
+        <select id="group">
+            <option value="species">Species</option>
+            <option value="island">Island</option>
+        </select>
+
+        <label for="measure">Measurement:</label>
+        <select id="measure">
+            <option value="body_mass_g">Body Mass (g)</option>
+            <option value="flipper_length_mm">Flipper Length (mm)</option>
+        </select>
+    </div>
+
+    <svg id="chart" width="760" height="460"></svg>
+
+    <script>
+        const svg = d3.select("#chart");
+
+        const width = 760;
+        const height = 460;
+
+        const margin = {
+            top: 25,
+            right: 25,
+            bottom: 75,
+            left: 85
+        };
+
+        const innerWidth = width - margin.left - margin.right;
+        const innerHeight = height - margin.top - margin.bottom;
+
+        const chart = svg.append("g")
+            .attr("transform",
+                `translate(${margin.left},${margin.top})`);
+
+        function drawChart(data) {
+            const groupField = document.getElementById("group").value;
+            const measureField = document.getElementById("measure").value;
+
+            const measureLabel = measureField === "body_mass_g"
+                ? "Average Body Mass (g)"
+                : "Average Flipper Length (mm)";
+
+            chart.selectAll("*").remove();
+
+            const grouped = d3.rollup(
+                data.filter(d =>
+                    d[groupField] != null &&
+                    d[measureField] != null
+                ),
+                v => d3.mean(v, d => d[measureField]),
+                d => d[groupField]
+            );
+
+            const result = Array.from(
+                grouped,
+                ([category, value]) => ({
+                    category: category,
+                    value: value
+                })
+            );
+
+            const x = d3.scaleBand()
+                .domain(result.map(d => d.category))
+                .range([0, innerWidth])
+                .padding(0.3);
+
+            const y = d3.scaleLinear()
+                .domain([
+                    0,
+                    d3.max(result, d => d.value)
+                ])
+                .nice()
+                .range([innerHeight, 0]);
+
+            chart.append("g")
+                .attr("transform",
+                    `translate(0,${innerHeight})`)
+                .call(d3.axisBottom(x));
+
+            chart.append("g")
+                .call(d3.axisLeft(y));
+
+            chart.selectAll("rect")
+                .data(result)
+                .join("rect")
+                .attr("x", d => x(d.category))
+                .attr("y", d => y(d.value))
+                .attr("width", x.bandwidth())
+                .attr("height",
+                    d => innerHeight - y(d.value))
+                .attr("fill", d =>
+                    groupField === "species" &&
+                    d.category === "Gentoo"
+                        ? "red"
+                        : "blue"
+                );
+
+            chart.append("text")
+                .attr("x", innerWidth / 2)
+                .attr("y", innerHeight + 55)
+                .attr("text-anchor", "middle")
+                .text(
+                    groupField === "species"
+                        ? "Penguin Species"
+                        : "Island"
+                );
+
+            chart.append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("x", -innerHeight / 2)
+                .attr("y", -58)
+                .attr("text-anchor", "middle")
+                .text(measureLabel);
+        }
+
+        d3.csv("dataset/penguins.csv", d3.autoType)
+            .then(data => {
+                drawChart(data);
+
+                d3.select("#group")
+                    .on("change", () => drawChart(data));
+
+                d3.select("#measure")
+                    .on("change", () => drawChart(data));
+            })
+            .catch(error => {
+                console.error("Error loading penguins.csv:", error);
+
+                d3.select("body")
+                    .append("p")
+                    .text(
+                        "Could not load the dataset. Check the CSV file path."
+                    );
+            });
+    </script>
+
+</body>
+</html>

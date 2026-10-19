@@ -1,0 +1,172 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lab 8 - Task 2</title>
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 30px;
+            color: #222;
+        }
+
+        .chart {
+            display: block;
+            margin-bottom: 30px;
+            max-width: 100%;
+        }
+
+        h2 {
+            color: #222;
+        }
+
+        h3 {
+            margin-top: 30px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2>Task 2: Two Penguin Charts</h2>
+
+    <h3>Chart 1: Average Body Mass by Species</h3>
+    <svg id="species-chart" class="chart" width="760" height="390"></svg>
+
+    <h3>Chart 2: Number of Penguins per Island</h3>
+    <svg id="island-chart" class="chart" width="760" height="390"></svg>
+
+    <script>
+        const width = 760;
+        const height = 390;
+
+        const margin = {
+            top: 20,
+            right: 25,
+            bottom: 70,
+            left: 85
+        };
+
+        const innerWidth = width - margin.left - margin.right;
+        const innerHeight = height - margin.top - margin.bottom;
+
+        function drawBarChart(svgSelector, rows, xLabel, yLabel, color) {
+
+            const svg = d3.select(svgSelector);
+
+            const chart = svg.append("g")
+                .attr("transform",
+                    `translate(${margin.left},${margin.top})`);
+
+            const x = d3.scaleBand()
+                .domain(rows.map(d => d.category))
+                .range([0, innerWidth])
+                .padding(0.3);
+
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(rows, d => d.value)])
+                .nice()
+                .range([innerHeight, 0]);
+
+            chart.append("g")
+                .attr("transform", `translate(0,${innerHeight})`)
+                .call(d3.axisBottom(x));
+
+            chart.append("g")
+                .call(d3.axisLeft(y));
+
+            chart.selectAll("rect")
+                .data(rows)
+                .join("rect")
+                .attr("x", d => x(d.category))
+                .attr("y", d => y(d.value))
+                .attr("width", x.bandwidth())
+                .attr("height", d => innerHeight - y(d.value))
+                .attr("fill", color);
+
+            chart.append("text")
+                .attr("x", innerWidth / 2)
+                .attr("y", innerHeight + 52)
+                .attr("text-anchor", "middle")
+                .text(xLabel);
+
+            chart.append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("x", -innerHeight / 2)
+                .attr("y", -58)
+                .attr("text-anchor", "middle")
+                .text(yLabel);
+        }
+
+        d3.csv("dataset/penguins.csv", d3.autoType)
+            .then(data => {
+
+                // Chart 1: Average body mass by species
+
+                const massBySpecies = d3.rollup(
+                    data.filter(d =>
+                        d.species != null &&
+                        d.body_mass_g != null
+                    ),
+                    v => d3.mean(v, d => d.body_mass_g),
+                    d => d.species
+                );
+
+                const speciesRows = Array.from(
+                    massBySpecies,
+                    ([category, value]) => ({
+                        category: category,
+                        value: value
+                    })
+                );
+
+                drawBarChart(
+                    "#species-chart",
+                    speciesRows,
+                    "Penguin Species",
+                    "Average Body Mass (g)",
+                    "steelblue"
+                );
+
+                // Chart 2: Number of penguins per island
+
+                const countByIsland = d3.rollup(
+                    data.filter(d => d.island != null),
+                    v => v.length,
+                    d => d.island
+                );
+
+                const islandRows = Array.from(
+                    countByIsland,
+                    ([category, value]) => ({
+                        category: category,
+                        value: value
+                    })
+                );
+
+                drawBarChart(
+                    "#island-chart",
+                    islandRows,
+                    "Island",
+                    "Number of Penguins",
+                    "seagreen"
+                );
+
+            })
+            .catch(error => {
+                console.error("Could not load penguins.csv:", error);
+
+                document.body.insertAdjacentHTML(
+                    "beforeend",
+                    "<p>Could not load the dataset. Check the CSV file path.</p>"
+                );
+            });
+    </script>
+
+</body>
+</html>
