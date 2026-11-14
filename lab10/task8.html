@@ -1,0 +1,196 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Task 8 - Moving Average</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+
+<body>
+
+<h2>Daily PM2.5 and 7-Day Moving Average</h2>
+<div id="chart"></div>
+
+<script>
+
+d3.csv("air_quality_2025.csv").then(data => {
+
+    const parseDate = d3.timeParse("%Y-%m-%d");
+
+    data.forEach(d => {
+        d.date = parseDate(d.date);
+        d.pm25_city = +d.pm25_city;
+    });
+
+    data.sort((a, b) => a.date - b.date);
+
+    const segments = [];
+    let currentSegment = [];
+
+    const gaps = [];
+
+    for (let i = 0; i < data.length; i++) {
+
+        if (i > 0) {
+            const days = d3.timeDay.count(
+                data[i - 1].date,
+                data[i].date
+            );
+
+            if (days > 1) {
+                segments.push(currentSegment);
+                currentSegment = [];
+
+                gaps.push({
+                    start: data[i - 1].date,
+                    end: data[i].date,
+                    missing: days - 1
+                });
+            }
+        }
+
+        currentSegment.push(data[i]);
+    }
+
+    segments.push(currentSegment);
+
+    segments.forEach(segment => {
+
+        segment.forEach((d, i) => {
+
+            if (i >= 6) {
+                d.movingAverage = d3.mean(
+                    segment.slice(i - 6, i + 1),
+                    d => d.pm25_city
+                );
+            }
+
+        });
+
+    });
+
+    const margin = {
+        top: 40,
+        right: 40,
+        bottom: 70,
+        left: 70
+    };
+
+    const width = 1000;
+    const height = 550;
+
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+
+    const svg = d3.select("#chart")
+        .append("svg")
+        .attr("width", width)
+        .attr("height", height);
+
+    const chart = svg.append("g")
+        .attr("transform",
+            `translate(${margin.left},${margin.top})`);
+
+    const x = d3.scaleTime()
+        .domain(d3.extent(data, d => d.date))
+        .range([0, innerWidth]);
+
+    const y = d3.scaleLinear()
+        .domain([0, d3.max(data, d => d.pm25_city)])
+        .nice()
+        .range([innerHeight, 0]);
+
+    chart.append("g")
+        .attr("transform", `translate(0,${innerHeight})`)
+        .call(d3.axisBottom(x));
+
+    chart.append("g")
+        .call(d3.axisLeft(y));
+
+    gaps.forEach(gap => {
+
+        chart.append("rect")
+            .attr("x", x(gap.start))
+            .attr("y", 0)
+            .attr("width", x(gap.end) - x(gap.start))
+            .attr("height", innerHeight)
+            .attr("fill", "orange")
+            .attr("opacity", 0.2);
+
+        chart.append("text")
+            .attr("x", (x(gap.start) + x(gap.end)) / 2)
+            .attr("y", 25)
+            .attr("text-anchor", "middle")
+            .attr("fill", "red")
+            .text("No data: sensor offline");
+
+    });
+
+    const dailyLine = d3.line()
+        .x(d => x(d.date))
+        .y(d => y(d.pm25_city));
+
+    const averageLine = d3.line()
+        .defined(d => d.movingAverage !== undefined)
+        .x(d => x(d.date))
+        .y(d => y(d.movingAverage));
+
+    segments.forEach(segment => {
+
+        chart.append("path")
+            .datum(segment)
+            .attr("fill", "none")
+            .attr("stroke", "gray")
+            .attr("stroke-width", 1)
+            .attr("opacity", 0.4)
+            .attr("d", dailyLine);
+
+        chart.append("path")
+            .datum(segment)
+            .attr("fill", "none")
+            .attr("stroke", "darkblue")
+            .attr("stroke-width", 3)
+            .attr("d", averageLine);
+
+    });
+
+    svg.append("text")
+        .attr("x", margin.left + innerWidth / 2)
+        .attr("y", height - 15)
+        .attr("text-anchor", "middle")
+        .text("Date");
+
+    svg.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -(margin.top + innerHeight / 2))
+        .attr("y", 20)
+        .attr("text-anchor", "middle")
+        .text("PM2.5 (µg/m³)");
+
+    svg.append("text")
+        .attr("x", margin.left)
+        .attr("y", 20)
+        .attr("fill", "gray")
+        .text("Thin gray line: Daily PM2.5");
+
+    svg.append("text")
+        .attr("x", margin.left + 250)
+        .attr("y", 20)
+        .attr("fill", "darkblue")
+        .text("Thick blue line: 7-day moving average");
+
+    const totalMissing = d3.sum(gaps, d => d.missing);
+
+    svg.append("text")
+        .attr("x", margin.left)
+        .attr("y", height - 35)
+        .text(`Missing days: ${totalMissing}`);
+
+}).catch(error => {
+    console.log("Error loading data:", error);
+});
+
+</script>
+
+</body>
+</html>

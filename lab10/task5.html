@@ -1,0 +1,178 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lab 10 - Task 5</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+
+    <h2>Monthly Pollution Composition - 2025</h2>
+
+    <div id="chart"></div>
+
+    <script>
+
+        const parseDate = d3.timeParse("%Y-%m-%d");
+
+        d3.csv("air_quality_2025.csv").then(data => {
+
+            data.forEach(d => {
+                d.date = parseDate(d.date);
+                d.pm25_city = +d.pm25_city;
+
+                if (d.pm25_city <= 35) {
+                    d.level = "Low";
+                }
+                else if (d.pm25_city <= 75) {
+                    d.level = "Moderate";
+                }
+                else if (d.pm25_city <= 150) {
+                    d.level = "High";
+                }
+                else {
+                    d.level = "Severe";
+                }
+
+                d.month = d.date.getMonth();
+            });
+
+            const levels = ["Low", "Moderate", "High", "Severe"];
+
+            // Group data by month and count pollution levels
+
+            const monthly = d3.rollup(
+                data,
+                values => {
+                    let counts = {
+                        Low: 0,
+                        Moderate: 0,
+                        High: 0,
+                        Severe: 0
+                    };
+
+                    values.forEach(d => {
+                        counts[d.level]++;
+                    });
+
+                    return counts;
+                },
+                d => d.month
+            );
+
+            // Prepare all 12 months
+
+            const months = Array.from(
+                {length: 12},
+                (_, i) => {
+                    let counts = monthly.get(i) || {
+                        Low: 0,
+                        Moderate: 0,
+                        High: 0,
+                        Severe: 0
+                    };
+
+                    return {
+                        month: d3.timeFormat("%b")(
+                            new Date(2025, i, 1)
+                        ),
+                        ...counts
+                    };
+                }
+            );
+
+            // Create stacked data
+
+            const stackedData = d3.stack()
+                .keys(levels)(months);
+
+            const width = 900;
+            const height = 500;
+
+            const margin = {
+                top: 30,
+                right: 150,
+                bottom: 60,
+                left: 70
+            };
+
+            const svg = d3.select("#chart")
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height);
+
+            const x = d3.scaleBand()
+                .domain(months.map(d => d.month))
+                .range([margin.left, width - margin.right])
+                .padding(0.2);
+
+            const y = d3.scaleLinear()
+                .domain([
+                    0,
+                    d3.max(months, d =>
+                        d.Low + d.Moderate + d.High + d.Severe
+                    )
+                ])
+                .range([height - margin.bottom, margin.top]);
+
+            const color = d3.scaleOrdinal()
+                .domain(levels)
+                .range(["#d9f0a3", "#addd8e", "#78c679", "#238443"]);
+
+            // X axis
+
+            svg.append("g")
+                .attr("transform", `translate(0,${height - margin.bottom})`)
+                .call(d3.axisBottom(x));
+
+            // Y axis
+
+            svg.append("g")
+                .attr("transform", `translate(${margin.left},0)`)
+                .call(d3.axisLeft(y));
+
+            // Draw stacked bars
+
+            svg.append("g")
+                .selectAll("g")
+                .data(stackedData)
+                .join("g")
+                .attr("fill", d => color(d.key))
+                .selectAll("rect")
+                .data(d => d)
+                .join("rect")
+                .attr("x", d => x(d.data.month))
+                .attr("y", d => y(d[1]))
+                .attr("height", d => y(d[0]) - y(d[1]))
+                .attr("width", x.bandwidth());
+
+            // Legend
+
+            levels.forEach((level, i) => {
+
+                svg.append("rect")
+                    .attr("x", width - 130)
+                    .attr("y", 100 + i * 30)
+                    .attr("width", 15)
+                    .attr("height", 15)
+                    .attr("fill", color(level));
+
+                svg.append("text")
+                    .attr("x", width - 105)
+                    .attr("y", 113 + i * 30)
+                    .text(level);
+
+            });
+
+        })
+        .catch(error => {
+            console.log(error);
+
+            d3.select("#chart")
+                .text("Error loading CSV: " + error.message);
+        });
+
+    </script>
+
+</body>
+</html>

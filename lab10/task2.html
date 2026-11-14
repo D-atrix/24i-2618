@@ -1,0 +1,134 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lab 10 - Task 2</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+
+    <h2>Daily City PM2.5 Levels - 2025</h2>
+
+    <div id="info"></div>
+
+    <div id="chart"></div>
+
+    <script>
+
+        const parseDate = d3.timeParse("%Y-%m-%d");
+
+        d3.csv("air_quality_2025.csv").then(data => {
+
+            data.forEach(d => {
+                d.date = parseDate(d.date);
+                d.pm25_city = +d.pm25_city;
+            });
+
+            let above15 = data.filter(d => d.pm25_city > 15).length;
+
+            let above75 = data.filter(d => d.pm25_city > 75).length;
+
+            d3.select("#info").html(`
+                <p>Days above 15: ${above15}</p>
+                <p>Days above 75: ${above75}</p>
+            `);
+
+            data.sort((a, b) => a.date - b.date);
+
+            let highest = data
+                .sort((a, b) => d3.descending(a.pm25_city, b.pm25_city))
+                .slice(0, 2);
+
+            data.sort((a, b) => a.date - b.date);
+
+            const margin = {
+                top: 30,
+                right: 100,
+                bottom: 60,
+                left: 70
+            };
+
+            const width = 900;
+            const height = 500;
+
+            const svg = d3.select("#chart")
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height);
+
+            const x = d3.scaleTime()
+                .domain(d3.extent(data, d => d.date))
+                .range([margin.left, width - margin.right]);
+
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(data, d => d.pm25_city) + 30])
+                .range([height - margin.bottom, margin.top]);
+
+            svg.append("g")
+                .attr("transform", `translate(0,${height - margin.bottom})`)
+                .call(d3.axisBottom(x));
+
+            svg.append("g")
+                .attr("transform", `translate(${margin.left},0)`)
+                .call(d3.axisLeft(y));
+
+            const line = d3.line()
+                .x(d => x(d.date))
+                .y(d => y(d.pm25_city));
+
+            svg.append("path")
+                .datum(data)
+                .attr("fill", "none")
+                .attr("stroke", "steelblue")
+                .attr("stroke-width", 2)
+                .attr("d", line);
+
+            const levels = [
+                {value: 15, label: "WHO Guideline (15)", color: "green"},
+                {value: 75, label: "WHO Interim Target 1 (75)", color: "red"}
+            ];
+
+            levels.forEach(level => {
+
+                svg.append("line")
+                    .attr("x1", margin.left)
+                    .attr("x2", width - margin.right)
+                    .attr("y1", y(level.value))
+                    .attr("y2", y(level.value))
+                    .attr("stroke", level.color)
+                    .attr("stroke-width", 2)
+                    .attr("stroke-dasharray", "6,4");
+
+                svg.append("text")
+                    .attr("x", width - margin.right + 5)
+                    .attr("y", y(level.value) - 5)
+                    .attr("fill", level.color)
+                    .text(level.label);
+            });
+
+            svg.selectAll(".peak")
+                .data(highest)
+                .enter()
+                .append("circle")
+                .attr("cx", d => x(d.date))
+                .attr("cy", d => y(d.pm25_city))
+                .attr("r", 6)
+                .attr("fill", "red");
+
+            svg.selectAll(".label")
+                .data(highest)
+                .enter()
+                .append("text")
+                .attr("x", d => x(d.date) + 10)
+                .attr("y", d => y(d.pm25_city) - 10)
+                .attr("fill", "red")
+                .text(d =>
+                    `${d3.timeFormat("%b %d")(d.date)}: ${d.pm25_city}`
+                );
+
+        });
+
+    </script>
+
+</body>
+</html>

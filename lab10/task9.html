@@ -1,0 +1,245 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Task 9 - Interactive Zoom</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+
+<body>
+
+<h2>Interactive PM2.5 Time Series Chart</h2>
+
+<button id="reset">Reset Full Year</button>
+
+<div id="chart"></div>
+
+<script>
+
+d3.csv("air_quality_2025.csv").then(data => {
+
+    const parseDate = d3.timeParse("%Y-%m-%d");
+
+    data.forEach(d => {
+        d.date = parseDate(d.date);
+        d.pm25_city = +d.pm25_city;
+    });
+
+    data.sort((a, b) => a.date - b.date);
+
+    const segments = [];
+    let currentSegment = [];
+
+    const gaps = [];
+
+    for (let i = 0; i < data.length; i++) {
+
+        if (i > 0) {
+
+            const days = d3.timeDay.count(
+                data[i - 1].date,
+                data[i].date
+            );
+
+            if (days > 1) {
+
+                segments.push(currentSegment);
+                currentSegment = [];
+
+                gaps.push({
+                    start: data[i - 1].date,
+                    end: data[i].date
+                });
+
+            }
+        }
+
+        currentSegment.push(data[i]);
+    }
+
+    segments.push(currentSegment);
+
+    const margin = {
+        top: 40,
+        right: 40,
+        bottom: 40,
+        left: 70
+    };
+
+    const width = 1000;
+    const height = 650;
+
+    const mainHeight = 350;
+    const overviewHeight = 80;
+
+    const innerWidth = width - margin.left - margin.right;
+
+    const svg = d3.select("#chart")
+        .append("svg")
+        .attr("width", width)
+        .attr("height", height);
+
+    const mainChart = svg.append("g")
+        .attr("transform",
+            `translate(${margin.left},${margin.top})`);
+
+    const overview = svg.append("g")
+        .attr("transform",
+            `translate(${margin.left},${margin.top + 450})`);
+
+    const xMain = d3.scaleTime()
+        .domain(d3.extent(data, d => d.date))
+        .range([0, innerWidth]);
+
+    const xOverview = d3.scaleTime()
+        .domain(d3.extent(data, d => d.date))
+        .range([0, innerWidth]);
+
+    const yMain = d3.scaleLinear()
+        .domain([0, d3.max(data, d => d.pm25_city)])
+        .nice()
+        .range([mainHeight, 0]);
+
+    const yOverview = d3.scaleLinear()
+        .domain(yMain.domain())
+        .range([overviewHeight, 0]);
+
+    const mainXAxis = mainChart.append("g")
+        .attr("transform", `translate(0,${mainHeight})`);
+
+    mainChart.append("g")
+        .call(d3.axisLeft(yMain));
+
+    const overviewXAxis = overview.append("g")
+        .attr("transform", `translate(0,${overviewHeight})`)
+        .call(d3.axisBottom(xOverview));
+
+    const mainLine = d3.line()
+        .x(d => xMain(d.date))
+        .y(d => yMain(d.pm25_city));
+
+    const overviewLine = d3.line()
+        .x(d => xOverview(d.date))
+        .y(d => yOverview(d.pm25_city));
+
+    overview.selectAll(".overview-line")
+        .data(segments)
+        .enter()
+        .append("path")
+        .attr("class", "overview-line")
+        .attr("fill", "none")
+        .attr("stroke", "steelblue")
+        .attr("stroke-width", 1.5)
+        .attr("d", overviewLine);
+
+    function updateMain(domain) {
+
+        xMain.domain(domain);
+
+        mainXAxis.call(d3.axisBottom(xMain));
+
+        mainChart.selectAll(".main-line").remove();
+        mainChart.selectAll(".main-gap").remove();
+        mainChart.selectAll(".gap-label").remove();
+
+        gaps.forEach(gap => {
+
+            const left = xMain(gap.start);
+            const right = xMain(gap.end);
+
+            if (right >= 0 && left <= innerWidth) {
+
+                mainChart.append("rect")
+                    .attr("class", "main-gap")
+                    .attr("x", Math.max(0, left))
+                    .attr("y", 0)
+                    .attr("width",
+                        Math.max(0,
+                            Math.min(innerWidth, right) -
+                            Math.max(0, left)))
+                    .attr("height", mainHeight)
+                    .attr("fill", "orange")
+                    .attr("opacity", 0.2);
+
+                if (right - left > 40) {
+                    mainChart.append("text")
+                        .attr("class", "gap-label")
+                        .attr("x", (left + right) / 2)
+                        .attr("y", 25)
+                        .attr("text-anchor", "middle")
+                        .attr("fill", "red")
+                        .text("Sensor offline");
+                }
+            }
+
+        });
+
+        segments.forEach(segment => {
+
+            mainChart.append("path")
+                .datum(segment)
+                .attr("class", "main-line")
+                .attr("fill", "none")
+                .attr("stroke", "steelblue")
+                .attr("stroke-width", 2)
+                .attr("d", mainLine);
+
+        });
+
+    }
+
+    updateMain(xOverview.domain());
+
+    const brush = d3.brushX()
+        .extent([
+            [0, 0],
+            [innerWidth, overviewHeight]
+        ])
+        .on("brush end", event => {
+
+            if (event.selection) {
+
+                const selection = event.selection;
+
+                const start = xOverview.invert(selection[0]);
+                const end = xOverview.invert(selection[1]);
+
+                updateMain([start, end]);
+
+            } else {
+
+                updateMain(xOverview.domain());
+
+            }
+
+        });
+
+    overview.append("g")
+        .attr("class", "brush")
+        .call(brush);
+
+    d3.select("#reset").on("click", () => {
+
+        overview.select(".brush")
+            .call(brush.move, null);
+
+    });
+
+    svg.append("text")
+        .attr("x", margin.left)
+        .attr("y", 20)
+        .text("Main Chart - Selected Period");
+
+    overview.append("text")
+        .attr("x", 0)
+        .attr("y", -15)
+        .text("Overview - Drag to Select a Period");
+
+}).catch(error => {
+    console.log("Error loading data:", error);
+});
+
+</script>
+
+</body>
+</html>

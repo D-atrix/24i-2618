@@ -1,0 +1,175 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Task 7 - Monthly Min Max Chart</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+
+<body>
+
+<h2>Monthly PM2.5: Minimum, Maximum and Average</h2>
+
+<div id="chart"></div>
+
+<script>
+
+d3.csv("air_quality_2025.csv").then(data => {
+
+    const parseDate = d3.timeParse("%Y-%m-%d");
+
+    data.forEach(d => {
+        d.date = parseDate(d.date);
+        d.pm25_city = +d.pm25_city;
+        d.month = d.date.getMonth();
+    });
+
+    const monthlyData = Array.from(
+        d3.rollup(
+            data,
+            v => ({
+                min: d3.min(v, d => d.pm25_city),
+                max: d3.max(v, d => d.pm25_city),
+                mean: d3.mean(v, d => d.pm25_city)
+            }),
+            d => d.month
+        ),
+        ([month, values]) => ({
+            month: month,
+            min: values.min,
+            max: values.max,
+            mean: values.mean
+        })
+    );
+
+    monthlyData.sort((a, b) => a.month - b.month);
+
+    const months = [
+        "January", "February", "March", "April",
+        "May", "June", "July", "August",
+        "September", "October", "November", "December"
+    ];
+
+    const margin = {
+        top: 40,
+        right: 30,
+        bottom: 70,
+        left: 70
+    };
+
+    const width = 900;
+    const height = 550;
+
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+
+    const svg = d3.select("#chart")
+        .append("svg")
+        .attr("width", width)
+        .attr("height", height);
+
+    const chart = svg.append("g")
+        .attr("transform",
+            `translate(${margin.left},${margin.top})`);
+
+    const x = d3.scalePoint()
+        .domain(months)
+        .range([0, innerWidth]);
+
+    const y = d3.scaleLinear()
+        .domain([0, d3.max(monthlyData, d => d.max)])
+        .nice()
+        .range([innerHeight, 0]);
+
+    chart.append("g")
+        .attr("transform", `translate(0,${innerHeight})`)
+        .call(d3.axisBottom(x));
+
+    chart.append("g")
+        .call(d3.axisLeft(y));
+
+    const area = d3.area()
+        .x(d => x(months[d.month]))
+        .y0(d => y(d.min))
+        .y1(d => y(d.max));
+
+    chart.append("path")
+        .datum(monthlyData)
+        .attr("fill", "lightblue")
+        .attr("opacity", 0.6)
+        .attr("d", area);
+
+    const line = d3.line()
+        .x(d => x(months[d.month]))
+        .y(d => y(d.mean));
+
+    chart.append("path")
+        .datum(monthlyData)
+        .attr("fill", "none")
+        .attr("stroke", "blue")
+        .attr("stroke-width", 3)
+        .attr("d", line);
+
+    chart.selectAll("circle")
+        .data(monthlyData)
+        .enter()
+        .append("circle")
+        .attr("cx", d => x(months[d.month]))
+        .attr("cy", d => y(d.mean))
+        .attr("r", 4)
+        .attr("fill", "blue")
+        .append("title")
+        .text(d =>
+            `${months[d.month]}
+Minimum: ${d.min.toFixed(2)}
+Maximum: ${d.max.toFixed(2)}
+Mean: ${d.mean.toFixed(2)}`
+        );
+
+    svg.append("text")
+        .attr("x", margin.left + innerWidth / 2)
+        .attr("y", height - 15)
+        .attr("text-anchor", "middle")
+        .text("Month");
+
+    svg.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -(margin.top + innerHeight / 2))
+        .attr("y", 20)
+        .attr("text-anchor", "middle")
+        .text("PM2.5 (µg/m³)");
+
+    svg.append("rect")
+        .attr("x", width - 190)
+        .attr("y", 35)
+        .attr("width", 15)
+        .attr("height", 15)
+        .attr("fill", "lightblue")
+        .attr("opacity", 0.6);
+
+    svg.append("text")
+        .attr("x", width - 168)
+        .attr("y", 48)
+        .text("Minimum to Maximum");
+
+    svg.append("line")
+        .attr("x1", width - 190)
+        .attr("x2", width - 175)
+        .attr("y1", 75)
+        .attr("y2", 75)
+        .attr("stroke", "blue")
+        .attr("stroke-width", 3);
+
+    svg.append("text")
+        .attr("x", width - 168)
+        .attr("y", 80)
+        .text("Monthly Mean");
+
+}).catch(error => {
+    console.log("Error loading data:", error);
+});
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,184 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Task 6 - PM2.5 Heatmap</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+
+<body>
+
+<h2>Average City PM2.5 by Month and Weekday</h2>
+
+<div id="chart"></div>
+
+<script>
+
+d3.csv("air_quality_2025.csv").then(data => {
+
+    const parseDate = d3.timeParse("%Y-%m-%d");
+
+    data.forEach(d => {
+        d.date = parseDate(d.date);
+        d.pm25_city = +d.pm25_city;
+        d.month = d.date.getMonth();
+        d.weekday = d.date.getDay();
+    });
+
+    const months = [
+        "January", "February", "March", "April",
+        "May", "June", "July", "August",
+        "September", "October", "November", "December"
+    ];
+
+    const weekdays = [
+        "Sunday", "Monday", "Tuesday", "Wednesday",
+        "Thursday", "Friday", "Saturday"
+    ];
+
+    const averages = d3.rollup(
+        data,
+        v => d3.mean(v, d => d.pm25_city),
+        d => d.month,
+        d => d.weekday
+    );
+
+    const cells = [];
+
+    for (let m = 0; m < 12; m++) {
+        for (let w = 0; w < 7; w++) {
+
+            const monthData = averages.get(m);
+            const value = monthData ? monthData.get(w) : undefined;
+
+            cells.push({
+                month: months[m],
+                weekday: weekdays[w],
+                value: value
+            });
+        }
+    }
+
+    const margin = {
+        top: 40,
+        right: 150,
+        bottom: 70,
+        left: 110
+    };
+
+    const width = 900;
+    const height = 600;
+
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+
+    const svg = d3.select("#chart")
+        .append("svg")
+        .attr("width", width)
+        .attr("height", height);
+
+    const chart = svg.append("g")
+        .attr("transform",
+            `translate(${margin.left},${margin.top})`);
+
+    const x = d3.scaleBand()
+        .domain(weekdays)
+        .range([0, innerWidth])
+        .padding(0.05);
+
+    const y = d3.scaleBand()
+        .domain(months)
+        .range([0, innerHeight])
+        .padding(0.05);
+
+    const values = cells
+        .filter(d => d.value !== undefined)
+        .map(d => d.value);
+
+    const color = d3.scaleSequential()
+        .domain(d3.extent(values))
+        .interpolator(d3.interpolateYlOrRd);
+
+    chart.append("g")
+        .attr("transform", `translate(0,${innerHeight})`)
+        .call(d3.axisBottom(x));
+
+    chart.append("g")
+        .call(d3.axisLeft(y));
+
+    chart.selectAll("rect")
+        .data(cells)
+        .enter()
+        .append("rect")
+        .attr("x", d => x(d.weekday))
+        .attr("y", d => y(d.month))
+        .attr("width", x.bandwidth())
+        .attr("height", y.bandwidth())
+        .attr("fill", d =>
+            d.value === undefined ? "#eeeeee" : color(d.value)
+        )
+        .append("title")
+        .text(d =>
+            d.value === undefined
+                ? `${d.month}, ${d.weekday}: No data`
+                : `${d.month}, ${d.weekday}: ${d.value.toFixed(2)}`
+        );
+
+    svg.append("text")
+        .attr("x", margin.left + innerWidth / 2)
+        .attr("y", height - 15)
+        .attr("text-anchor", "middle")
+        .text("Day of Week");
+
+    svg.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -(margin.top + innerHeight / 2))
+        .attr("y", 20)
+        .attr("text-anchor", "middle")
+        .text("Month");
+
+    const legendWidth = 120;
+    const legendHeight = 15;
+
+    const defs = svg.append("defs");
+
+    const gradient = defs.append("linearGradient")
+        .attr("id", "heatmap-gradient");
+
+    gradient.append("stop")
+        .attr("offset", "0%")
+        .attr("stop-color", color(d3.min(values)));
+
+    gradient.append("stop")
+        .attr("offset", "100%")
+        .attr("stop-color", color(d3.max(values)));
+
+    const legend = svg.append("g")
+        .attr("transform",
+            `translate(${margin.left + innerWidth + 20},${margin.top + 100})`);
+
+    legend.append("text")
+        .attr("y", -12)
+        .text("Average PM2.5");
+
+    legend.append("rect")
+        .attr("width", legendWidth)
+        .attr("height", legendHeight)
+        .attr("fill", "url(#heatmap-gradient)");
+
+    const legendScale = d3.scaleLinear()
+        .domain(d3.extent(values))
+        .range([0, legendWidth]);
+
+    legend.append("g")
+        .attr("transform", `translate(0,${legendHeight})`)
+        .call(d3.axisBottom(legendScale).ticks(4));
+
+}).catch(error => {
+    console.log("Error loading data:", error);
+});
+
+</script>
+
+</body>
+</html>

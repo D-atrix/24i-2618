@@ -1,0 +1,50 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lab 10 - Task 1</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+
+    <h2>Task 1: Dataset Inspection</h2>
+
+    <div id="result"></div>
+
+    <script>
+
+        const parseDate = d3.timeParse("%Y-%m-%d");
+
+        d3.csv("air_quality_2025.csv").then(data => {
+
+            data.forEach(d => {
+                d.date = parseDate(d.date);
+            });
+
+            let totalRows = data.length;
+
+            let firstDate = d3.min(data, d => d.date);
+            let lastDate = d3.max(data, d => d.date);
+
+            let totalDays = d3.timeDay.count(
+                new Date(2025, 0, 1),
+                new Date(2026, 0, 1)
+            );
+
+            let missingDays = totalDays - totalRows;
+
+            d3.select("#result")
+                .html(`
+                    <p>Total Rows: ${totalRows}</p>
+                    <p>First Date: ${d3.timeFormat("%Y-%m-%d")(firstDate)}</p>
+                    <p>Last Date: ${d3.timeFormat("%Y-%m-%d")(lastDate)}</p>
+                    <p>Total Days in 2025: ${totalDays}</p>
+                    <p>Missing Days: ${missingDays}</p>
+                `);
+
+        });
+
+    </script>
+
+</body>
+</html>

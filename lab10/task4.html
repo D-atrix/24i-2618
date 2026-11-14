@@ -1,0 +1,124 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lab 10 - Task 4</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+
+    <h2>City vs Suburb PM2.5 - 2025</h2>
+
+    <div id="chart"></div>
+
+    <script>
+
+        const parseDate = d3.timeParse("%Y-%m-%d");
+
+        d3.csv("air_quality_2025.csv").then(data => {
+
+            data.forEach(d => {
+                d.date = parseDate(d.date);
+                d.pm25_city = +d.pm25_city;
+                d.pm25_suburb = +d.pm25_suburb;
+            });
+
+            data.sort((a, b) => a.date - b.date);
+
+            const width = 900;
+            const height = 500;
+
+            const margin = {
+                top: 40,
+                right: 40,
+                bottom: 60,
+                left: 70
+            };
+
+            const svg = d3.select("#chart")
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height);
+
+            const x = d3.scaleTime()
+                .domain(d3.extent(data, d => d.date))
+                .range([margin.left, width - margin.right]);
+
+            const y = d3.scaleLinear()
+                .domain([
+                    0,
+                    d3.max(data, d =>
+                        Math.max(d.pm25_city, d.pm25_suburb)
+                    )
+                ])
+                .range([height - margin.bottom, margin.top]);
+
+            svg.append("g")
+                .attr("transform", `translate(0,${height - margin.bottom})`)
+                .call(d3.axisBottom(x));
+
+            svg.append("g")
+                .attr("transform", `translate(${margin.left},0)`)
+                .call(d3.axisLeft(y));
+
+            const cityLine = d3.line()
+                .x(d => x(d.date))
+                .y(d => y(d.pm25_city));
+
+            const suburbLine = d3.line()
+                .x(d => x(d.date))
+                .y(d => y(d.pm25_suburb));
+
+            svg.append("path")
+                .datum(data)
+                .attr("fill", "none")
+                .attr("stroke", "steelblue")
+                .attr("stroke-width", 2)
+                .attr("d", cityLine);
+
+            svg.append("path")
+                .datum(data)
+                .attr("fill", "none")
+                .attr("stroke", "red")
+                .attr("stroke-width", 2)
+                .attr("d", suburbLine);
+
+            // Legend
+
+            svg.append("line")
+                .attr("x1", 650)
+                .attr("x2", 680)
+                .attr("y1", 20)
+                .attr("y2", 20)
+                .attr("stroke", "steelblue")
+                .attr("stroke-width", 3);
+
+            svg.append("text")
+                .attr("x", 685)
+                .attr("y", 25)
+                .text("City Centre");
+
+            svg.append("line")
+                .attr("x1", 650)
+                .attr("x2", 680)
+                .attr("y1", 40)
+                .attr("y2", 40)
+                .attr("stroke", "red")
+                .attr("stroke-width", 3);
+
+            svg.append("text")
+                .attr("x", 685)
+                .attr("y", 45)
+                .text("Suburb");
+
+        })
+        .catch(error => {
+            console.log(error);
+            d3.select("#chart")
+                .text("Error loading CSV: " + error.message);
+        });
+
+    </script>
+
+</body>
+</html>
